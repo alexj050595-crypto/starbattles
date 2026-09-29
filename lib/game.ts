@@ -1,57 +1,181 @@
 export type Mark = "empty" | "star" | "x";
 export type Difficulty = "Easy" | "Medium" | "Hard" | "Expert";
+
 export type Level = {
-  id:number; size:number; starsPerUnit:number; regions:number[]; solution:number[]; difficulty:Difficulty;
+  id: number;
+  size: number;
+  starsPerUnit: number;
+  regions: number[];
+  solution: number[];
+  difficulty: Difficulty;
 };
 
-export function index(r:number,c:number,n:number){return r*n+c}
-export function neighbors(i:number,n:number){
-  const r=Math.floor(i/n),c=i%n, out:number[]=[];
-  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
-    if(!dr&&!dc)continue; const rr=r+dr,cc=c+dc;
-    if(rr>=0&&rr<n&&cc>=0&&cc<n)out.push(index(rr,cc,n));
-  } return out;
-}
-export function validStars(level:Level, stars:Set<number>){
-  const {size:n,starsPerUnit:k}=level;
-  for(let r=0;r<n;r++) if([...stars].filter(i=>Math.floor(i/n)===r).length>k)return false;
-  for(let c=0;c<n;c++) if([...stars].filter(i=>i%n===c).length>k)return false;
-  const counts=new Array(n).fill(0);
-  for(const i of stars) counts[level.regions[i]]++;
-  if(counts.some(x=>x>k))return false;
-  for(const i of stars) for(const j of neighbors(i,n)) if(stars.has(j))return false;
-  return true;
-}
-export function solved(level:Level,stars:Set<number>){
-  if(!validStars(level,stars)||stars.size!==level.size*level.starsPerUnit)return false;
-  const n=level.size,k=level.starsPerUnit;
-  for(let r=0;r<n;r++)if([...stars].filter(i=>Math.floor(i/n)===r).length!==k)return false;
-  for(let c=0;c<n;c++)if([...stars].filter(i=>i%n===c).length!==k)return false;
-  const counts=new Array(n).fill(0); for(const i of stars)counts[level.regions[i]]++;
-  return counts.every(x=>x===k);
+const SIZE = 6;
+const TOTAL = 1000;
+const cache = new Map<number, Level>();
+
+const dirs = [-1, 0, 1];
+
+function rng(seed: number) {
+  let x = seed >>> 0;
+  return () => {
+    x = Math.imul(1664525, x) + 1013904223;
+    return (x >>> 0) / 4294967296;
+  };
 }
 
-function seeded(seed:number){let x=seed|0;return()=>{x=Math.imul(1664525,x)+1013904223|0;return(x>>>0)/4294967296}}
-export function generateLevel(id:number):Level{
-  const n=6,k=1,rand=seeded(id*7919+17);
-  const cells=Array.from({length:n*n},(_,i)=>i);
-  let solution:number[]=[];
-  for(let tries=0;tries<5000&&!solution.length;tries++){
-    const order=[...cells].sort(()=>rand()-.5),chosen=new Set<number>();
-    for(const i of order){if(validStars({id,size:n,starsPerUnit:k,regions:regionsFor(id),solution:[],difficulty:"Easy"},chosen)){chosen.add(i);if(chosen.size===n)break;}}
-    if(chosen.size===n)solution=[...chosen];
-  }
-  if(solution.length!==n) solution=[0,2,9,13,20,31];
-  const difficulty:id%4===0?"Easy":id%4===1?"Medium":id%4===2?"Hard":"Expert";
-  return {id,size:n,starsPerUnit:k,regions:regionsFor(id),solution,difficulty};
+export function index(row: number, col: number, n = SIZE) {
+  return row * n + col;
 }
-function regionsFor(id:number){
-  const n=6, regions=new Array(36).fill(0);
-  const variants=[
-    [0,0,0,1,1,1,0,0,2,2,1,1,3,2,2,2,3,3,3,3,4,4,4,5,4,4,4,5,5,5,4,4,5,5,5,5],
-    [0,0,1,1,1,1,0,2,2,1,1,1,0,2,2,3,3,1,4,2,2,3,3,3,4,4,5,5,3,3,4,4,5,5,5,5]
-  ];
-  const v=variants[id%variants.length];
-  for(let i=0;i<36;i++)regions[i]=v[i%v.length];
+
+export function neighbors(cell: number, n = SIZE, diagonal = true) {
+  const row = Math.floor(cell / n);
+  const col = cell % n;
+  const result: number[] = [];
+  for (const dr of dirs) for (const dc of dirs) {
+    if (!dr && !dc) continue;
+    if (!diagonal && dr !== 0 && dc !== 0) continue;
+    const r = row + dr, c = col + dc;
+    if (r >= 0 && r < n && c >= 0 && c < n) result.push(index(r, c, n));
+  }
+  return result;
+}
+
+function compatible(level: Pick<Level, "size" | "regions" | "starsPerUnit">, placed: number[], cell: number) {
+  const n = level.size;
+  const row = Math.floor(cell / n);
+  const col = cell % n;
+  if (placed.some(p => Math.floor(p / n) === row || p % n === col)) return false;
+  if (placed.some(p => neighbors(p, n).includes(cell))) return false;
+  const region = level.regions[cell];
+  if (placed.filter(p => level.regions[p] === region).length >= level.starsPerUnit) return false;
+  return true;
+}
+
+export function validStars(level: Level, stars: Set<number>) {
+  const n = level.size, k = level.starsPerUnit;
+  const rows = new Array(n).fill(0);
+  const cols = new Array(n).fill(0);
+  const regions = new Array(n).fill(0);
+  for (const cell of stars) {
+    rows[Math.floor(cell / n)]++;
+    cols[cell % n]++;
+    regions[level.regions[cell]]++;
+    if (rows[Math.floor(cell / n)] > k || cols[cell % n] > k || regions[level.regions[cell]] > k) return false;
+    if (neighbors(cell, n).some(nbr => stars.has(nbr))) return false;
+  }
+  return true;
+}
+
+export function solved(level: Level, stars: Set<number>) {
+  if (stars.size !== level.size * level.starsPerUnit || !validStars(level, stars)) return false;
+  const n = level.size, k = level.starsPerUnit;
+  const rows = new Array(n).fill(0), cols = new Array(n).fill(0), regions = new Array(n).fill(0);
+  for (const cell of stars) {
+    rows[Math.floor(cell / n)]++;
+    cols[cell % n]++;
+    regions[level.regions[cell]]++;
+  }
+  return rows.every(x => x === k) && cols.every(x => x === k) && regions.every(x => x === k);
+}
+
+export function countSolutions(level: Level, limit = 2) {
+  const n = level.size;
+  let count = 0;
+  const placed: number[] = [];
+  const usedCols = new Set<number>();
+  const usedRegions = new Set<number>();
+
+  function search(row: number) {
+    if (count >= limit) return;
+    if (row === n) { count++; return; }
+    for (let col = 0; col < n; col++) {
+      const cell = index(row, col, n);
+      if (usedCols.has(col) || usedRegions.has(level.regions[cell])) continue;
+      if (placed.some(p => neighbors(p, n).includes(cell))) continue;
+      placed.push(cell); usedCols.add(col); usedRegions.add(level.regions[cell]);
+      search(row + 1);
+      placed.pop(); usedCols.delete(col); usedRegions.delete(level.regions[cell]);
+      if (count >= limit) return;
+    }
+  }
+  search(0);
+  return count;
+}
+
+function solutionFor(regions: number[], random: () => number) {
+  const level = { size: SIZE, starsPerUnit: 1, regions };
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const placed: number[] = [], cols = new Set<number>(), usedRegions = new Set<number>();
+    for (let row = 0; row < SIZE; row++) {
+      const candidates = Array.from({ length: SIZE }, (_, col) => index(row, col))
+        .filter(cell => !cols.has(cell % SIZE) && !usedRegions.has(regions[cell]) && !placed.some(p => neighbors(p).includes(cell)))
+        .sort(() => random() - 0.5);
+      const cell = candidates[0];
+      if (cell === undefined) break;
+      placed.push(cell); cols.add(cell % SIZE); usedRegions.add(regions[cell]);
+    }
+    if (placed.length === SIZE && placed.every((cell, i) => compatible(level, placed.slice(0, i), cell))) return placed;
+  }
+  return null;
+}
+
+function makeRegions(random: () => number, seeds: number[]) {
+  const regions = new Array(SIZE * SIZE).fill(-1);
+  const frontier: { cell: number; region: number }[] = [];
+  seeds.forEach((seed, region) => { regions[seed] = region; });
+  seeds.forEach((seed, region) => frontier.push(...neighbors(seed).map(cell => ({ cell, region }))));
+  while (frontier.length) {
+    const order = frontier.map((_, i) => i).sort(() => random() - 0.5);
+    let picked = -1;
+    for (const pos of order) {
+      const item = frontier[pos];
+      if (regions[item.cell] === -1) { picked = pos; break; }
+    }
+    if (picked < 0) break;
+    const item = frontier.splice(picked, 1)[0];
+    if (regions[item.cell] !== -1) continue;
+    regions[item.cell] = item.region;
+    for (const cell of neighbors(item.cell)) if (regions[cell] === -1) frontier.push({ cell, region: item.region });
+  }
+  for (let cell = 0; cell < regions.length; cell++) if (regions[cell] === -1) regions[cell] = cell % SIZE;
   return regions;
 }
+
+function difficultyFor(id: number): Difficulty {
+  if (id <= 150) return "Easy";
+  if (id <= 400) return "Medium";
+  if (id <= 700) return "Hard";
+  return "Expert";
+}
+
+export function generateLevel(id: number): Level {
+  if (cache.has(id)) return cache.get(id)!;
+  const safeId = Math.max(1, Math.min(TOTAL, id));
+  const random = rng(safeId * 2654435761);
+  let best: Level | null = null;
+
+  for (let attempt = 0; attempt < 250 && !best; attempt++) {
+    const seeds = new Set<number>();
+    while (seeds.size < SIZE) seeds.add(Math.floor(random() * SIZE * SIZE));
+    const solution = solutionFor(Array(SIZE * SIZE).fill(0), random);
+    if (!solution) continue;
+    const regions = makeRegions(random, solution);
+    const candidate: Level = {
+      id: safeId, size: SIZE, starsPerUnit: 1, regions, solution,
+      difficulty: difficultyFor(safeId)
+    };
+    if (countSolutions(candidate) === 1) best = candidate;
+  }
+
+  if (!best) {
+    const regions = Array.from({ length: SIZE * SIZE }, (_, cell) => Math.floor(cell / SIZE));
+    const solution = [0, 8, 16, 24, 32, 35];
+    best = { id: safeId, size: SIZE, starsPerUnit: 1, regions, solution, difficulty: difficultyFor(safeId) };
+  }
+
+  cache.set(safeId, best);
+  return best;
+}
+
+export function totalLevels() { return TOTAL; }
