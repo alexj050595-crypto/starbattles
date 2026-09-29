@@ -9,6 +9,14 @@ import { generateLevel, solved, totalLevels, type Difficulty, type Mark } from "
 
 const SIZE = 6;
 const EMPTY = () => Array<Mark>(SIZE * SIZE).fill("empty");
+const REGION_STYLES = [
+  "rgba(99,102,241,.10)",
+  "rgba(14,165,233,.09)",
+  "rgba(16,185,129,.09)",
+  "rgba(245,158,11,.09)",
+  "rgba(236,72,153,.09)",
+  "rgba(139,92,246,.10)"
+];
 const difficultyStyles: Record<Difficulty, string> = {
   Easy: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
   Medium: "text-sky-300 bg-sky-400/10 border-sky-400/20",
@@ -179,13 +187,23 @@ export default function Game() {
               {marks.map((mark, i) => {
                 const region = level.regions[i];
                 const row = Math.floor(i / SIZE), col = i % SIZE;
-                const borders = [
-                  row===0 || level.regions[i-SIZE]!==region ? "border-t-white/70" : "",
-                  row===SIZE-1 || level.regions[i+SIZE]!==region ? "border-b-white/70" : "",
-                  col===0 || level.regions[i-1]!==region ? "border-l-white/70" : "",
-                  col===SIZE-1 || level.regions[i+1]!==region ? "border-r-white/70" : ""
-                ].join(" ");
-                return <button key={i} onClick={() => toggleCell(i)} onContextMenu={e => {e.preventDefault();toggleCell(i,true)}} className={`relative flex items-center justify-center border transition hover:bg-white/[.06] ${borders} ${hint===i?"ring-2 ring-inset ring-amber-300":""}`} aria-label={`Cell ${i+1}`}>
+
+                const top = row === 0 || level.regions[i - SIZE] !== region;
+                const bottom = row === SIZE - 1 || level.regions[i + SIZE] !== region;
+                const left = col === 0 || level.regions[i - 1] !== region;
+                const right = col === SIZE - 1 || level.regions[i + 1] !== region;
+                const isRegionStart = i === level.regions.findIndex(value => value === region);
+                return <button key={i} onClick={() => toggleCell(i)} onContextMenu={e => {e.preventDefault();toggleCell(i,true)}} style={{
+                  backgroundColor: REGION_STYLES[region],
+                  borderTopWidth: top ? 3 : 1,
+                  borderBottomWidth: bottom ? 3 : 1,
+                  borderLeftWidth: left ? 3 : 1,
+                  borderRightWidth: right ? 3 : 1,
+                  borderTopColor: top ? "rgba(255,255,255,.58)" : "rgba(255,255,255,.08)",
+                  borderBottomColor: bottom ? "rgba(255,255,255,.58)" : "rgba(255,255,255,.08)",
+                  borderLeftColor: left ? "rgba(255,255,255,.58)" : "rgba(255,255,255,.08)",
+                  borderRightColor: right ? "rgba(255,255,255,.58)" : "rgba(255,255,255,.08)"
+                }} className={`relative flex items-center justify-center border transition hover:brightness-125 ${hint===i?"ring-2 ring-inset ring-amber-300":""}`} aria-label={`Cell ${i+1}${isRegionStart ? ", region " + (region + 1) : ""}`}>
                   {mark==="star" && <span className={`text-4xl leading-none drop-shadow-[0_0_14px_rgba(251,191,36,.35)] ${hasConflict(i) ? "text-rose-300" : "text-amber-300"}`}>★</span>}
                   {mark==="x" && <X size={22} className="text-white/25"/>}
                 </button>
