@@ -49,7 +49,12 @@ export default function Game() {
     try {
       const data = JSON.parse(saved);
       if (Number.isInteger(data.level)) setLevelId(Math.min(totalLevels(), Math.max(1, data.level)));
-      if (Array.isArray(data.marks) && data.marks.length === 36) setMarks(data.marks);
+      if (Array.isArray(data.marks) && data.marks.length === 36) {
+        const cleanMarks: Mark[] = data.marks.map((mark: unknown) =>
+          mark === "star" || mark === "dot" ? mark : "empty"
+        );
+        setMarks(cleanMarks);
+      }
       if (Number.isFinite(data.seconds)) setSeconds(data.seconds);
       if (Array.isArray(data.completedLevels)) setCompletedLevels(data.completedLevels);
       if (data.bestTimes && typeof data.bestTimes === "object") setBestTimes(data.bestTimes);
