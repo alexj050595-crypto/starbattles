@@ -186,7 +186,7 @@ export default function Game() {
                   col===SIZE-1 || level.regions[i+1]!==region ? "border-r-white/70" : ""
                 ].join(" ");
                 return <button key={i} onClick={() => toggleCell(i)} onContextMenu={e => {e.preventDefault();toggleCell(i,true)}} className={`relative flex items-center justify-center border transition hover:bg-white/[.06] ${borders} ${hint===i?"ring-2 ring-inset ring-amber-300":""}`} aria-label={`Cell ${i+1}`}>
-                  {mark==="star" && <span className={`text-4xl leading-none ${hasConflict(i) ? "text-rose-300" : "text-amber-300"}`} drop-shadow-[0_0_14px_rgba(251,191,36,.35)]">★</span>}
+                  {mark==="star" && <span className={`text-4xl leading-none drop-shadow-[0_0_14px_rgba(251,191,36,.35)] ${hasConflict(i) ? "text-rose-300" : "text-amber-300"}`}>★</span>}
                   {mark==="x" && <X size={22} className="text-white/25"/>}
                 </button>
               })}
