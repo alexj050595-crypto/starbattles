@@ -37,7 +37,7 @@ export default function Game() {
   const [hint, setHint] = useState<number | null>(null);
   const [screen, setScreen] = useState<"game" | "levels">("game");
   const [search, setSearch] = useState("");
-  const [tool, setTool] = useState<"star" | "dot">("star");
+  const [tool, setTool] = useState<"star" | "dot" | "x">("star");
 
   const level = useMemo(() => generateLevel(levelId), [levelId]);
   const starCount = marks.filter(x => x === "star").length;
@@ -93,11 +93,10 @@ export default function Game() {
     }
   }
 
-  function toggleCell(i: number, forceX = false) {
+  function toggleCell(i: number) {
     if (paused || complete) return;
     const next = [...marks];
-    if (forceX) next[i] = next[i] === "x" ? "empty" : "x";
-    else next[i] = next[i] === tool ? "empty" : tool;
+    next[i] = next[i] === tool ? "empty" : tool;
     commit(next);
   }
 
@@ -203,9 +202,13 @@ export default function Game() {
                 return <button
                   key={i}
                   type="button"
-                  onClick={() => toggleCell(i)}
-                  onContextMenu={e => { e.preventDefault(); toggleCell(i, true); }}
-                  onMouseDown={e => { if (e.button === 2) e.preventDefault(); }}
+                  onPointerDown={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleCell(i);
+                  }}
+                  onContextMenu={e => e.preventDefault()}
+                  onDragStart={e => e.preventDefault()}
                   style={{ backgroundColor: REGION_STYLES[region], boxShadow: outline }}
                   className={`relative flex min-h-0 min-w-0 select-none touch-none items-center justify-center overflow-hidden border-0 p-0 transition hover:brightness-125 active:brightness-110 ${hint===i?"ring-2 ring-inset ring-amber-300":""}`}
                   aria-label={`Cell ${i+1}${isRegionStart ? ", region " + (region + 1) : ""}`}
@@ -219,6 +222,7 @@ export default function Game() {
             <div className="mb-3 flex justify-center gap-2">
               <button type="button" onClick={() => setTool("star")} className={`control ${tool === "star" ? "border-amber-300/50 bg-amber-300/10 text-amber-200" : ""}`}>★ Stern</button>
               <button type="button" onClick={() => setTool("dot")} className={`control ${tool === "dot" ? "border-white/30 bg-white/10 text-white" : ""}`}><span className="h-2 w-2 rounded-full bg-current" /> Punkt</button>
+              <button type="button" onClick={() => setTool("x")} className={`control ${tool === "x" ? "border-white/30 bg-white/10 text-white" : ""}`}><X size={16}/> X</button>
             </div>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               <button className="control" onClick={undo} disabled={!history.length}><Undo2 size={16}/>Undo</button>
@@ -226,7 +230,7 @@ export default function Game() {
               <button className="control" onClick={reset}><RotateCcw size={16}/>Reset</button>
               <button className="control" onClick={giveHint}><Lightbulb size={16}/>Hint</button>
             </div>
-            <p className="mt-4 text-center text-xs text-white/30">Werkzeug auswählen · Rechtsklick: X · Sterne dürfen sich nicht berühren</p>
+            <p className="mt-4 text-center text-xs text-white/30">Werkzeug auswählen · Stern, Punkt oder X setzen · Sterne dürfen sich nicht berühren</p>
           </div>
 
           <aside className="space-y-3">
