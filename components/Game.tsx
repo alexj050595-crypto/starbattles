@@ -216,7 +216,9 @@ export default function Game() {
               <span className={`rounded-full border px-3 py-1 text-xs ${difficultyStyles[level.difficulty]}`}>{level.difficulty}</span>
               <span className="flex items-center gap-2 text-sm text-white/45"><Clock3 size={15}/>{fmt(seconds)}</span>
             </div>
-            <div className="mb-3 text-center text-xs text-white/30">Das Spielfeld bleibt beim Tippen fest stehen.</div>\n            <div\n              role="grid"
+            <div className="mb-3 text-center text-xs text-white/30">Das Spielfeld bleibt beim Tippen fest stehen.</div>
+            <div
+              role="grid"
               aria-label="Star Battles Spielfeld"
               className="mx-auto grid w-full max-w-[650px] flex-none grid-cols-6 grid-rows-6 overflow-hidden rounded-2xl border border-white/20 bg-[#0a0c11] select-none"
               style={{
