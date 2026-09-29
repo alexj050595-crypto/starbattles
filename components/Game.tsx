@@ -207,10 +207,12 @@ export default function Game() {
                     e.stopPropagation();
                     toggleCell(i);
                   }}
+                  onTouchStart={e => e.preventDefault()}
                   onContextMenu={e => e.preventDefault()}
                   onDragStart={e => e.preventDefault()}
-                  style={{ backgroundColor: REGION_STYLES[region], boxShadow: outline }}
+                  style={{ backgroundColor: REGION_STYLES[region], boxShadow: outline, touchAction: "none", WebkitUserSelect: "none" }}
                   className={`relative flex min-h-0 min-w-0 select-none touch-none items-center justify-center overflow-hidden border-0 p-0 transition hover:brightness-125 active:brightness-110 ${hint===i?"ring-2 ring-inset ring-amber-300":""}`}
+                  tabIndex={-1}
                   aria-label={`Cell ${i+1}${isRegionStart ? ", region " + (region + 1) : ""}`}
                 >
                   {mark==="star" && <span className={`text-4xl leading-none drop-shadow-[0_0_14px_rgba(251,191,36,.35)] ${hasConflict(i) ? "text-rose-300" : "text-amber-300"}`}>★</span>}
