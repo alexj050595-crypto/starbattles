@@ -14,7 +14,9 @@ Modernes Star-Battles-Logikspiel mit Next.js, React, TypeScript und npm.
 ## Features
 
 - 1.000 deterministisch erzeugte Level
-- Eindeutigkeitsprüfung des Rätsels durch einen Solver
+- Solver zur Prüfung der Rätsellogik
+- Sechs zusammenhängende Regionen mit jeweils sechs Feldern
+- Deutlich sichtbare, unregelmäßige Regionsformen
 - Vier Schwierigkeitsstufen
 - Levelsuche und Levelauswahl
 - Undo / Redo / Reset
