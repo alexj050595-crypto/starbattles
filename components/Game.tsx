@@ -1,48 +1,201 @@
 "use client";
-import {useEffect,useMemo,useState} from "react";
-import {ArrowLeft,ChevronRight,Clock3,RotateCcw,Undo2,Redo2,Lightbulb,Pause} from "lucide-react";
-import {generateLevel,solved,type Mark,type Level} from "@/lib/game";
 
-const TOTAL=1000;
-export default function Game(){
- const [levelId,setLevelId]=useState(1),[marks,setMarks]=useState<Mark[]>(()=>Array(36).fill("empty"));
- const [history,setHistory]=useState<Mark[][]>([]),[future,setFuture]=useState<Mark[][]>([]);
- const [seconds,setSeconds]=useState(0),[paused,setPaused]=useState(false),[done,setDone]=useState(false),[hint,setHint]=useState<number|null>(null);
- const level=useMemo(()=>generateLevel(levelId),[levelId]);
- useEffect(()=>{const saved=localStorage.getItem("star-battles-progress");if(saved){const p=JSON.parse(saved);setLevelId(p.level||1)}},[]);
- useEffect(()=>{if(paused||done)return;const t=setInterval(()=>setSeconds(s=>s+1),1000);return()=>clearInterval(t)},[paused,done]);
- useEffect(()=>{localStorage.setItem("star-battles-progress",JSON.stringify({level:levelId}))},[levelId]);
- function play(i:number,forceX=false){if(done)return;const next=[...marks];const value=forceX?"x":marks[i]==="star"?"empty":"star";next[i]=value;setHistory(h=>[...h,marks]);setFuture([]);setMarks(next);if(solved(level,new Set(next.flatMap((m,j)=>m==="star"?[j]:[]))))setDone(true)}
- function undo(){if(!history.length)return;const h=[...history],prev=h.pop()!;setFuture(f=>[marks,...f]);setHistory(h);setMarks(prev)}
- function redo(){if(!future.length)return;const f=[...future],next=f.pop()!;setHistory(h=>[...h,marks]);setFuture(f);setMarks(next)}
- function reset(){setMarks(Array(36).fill("empty"));setHistory([]);setFuture([]);setSeconds(0);setDone(false);setHint(null)}
- function hintMe(){const s=level.solution.find(i=>marks[i]!=="star");if(s!==undefined)setHint(s)}
- const fmt=(n:number)=>String(Math.floor(n/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0");
- const stars=marks.filter(x=>x==="star").length;
- return <main className="min-h-screen px-4 py-6 md:px-8">
-  <div className="mx-auto max-w-6xl">
-   <header className="mb-6 flex items-center justify-between"><button className="rounded-xl border border-white/10 p-3"><ArrowLeft size={18}/></button><div className="text-center"><div className="text-xs uppercase tracking-[.25em] text-white/40">Star Battles</div><h1 className="mt-1 text-xl font-semibold">Level {levelId}</h1></div><button onClick={()=>setPaused(!paused)} className="rounded-xl border border-white/10 p-3">{paused?<ChevronRight size={18}/>:<Pause size={18}/>}</button></header>
-   <section className="grid gap-6 lg:grid-cols-[1fr_300px]">
-    <div className="rounded-3xl border border-white/10 bg-white/[.035] p-3 shadow-2xl md:p-6">
-     <div className="mb-4 flex items-center justify-between text-sm text-white/50"><span>{level.difficulty}</span><span>{fmt(seconds)}</span></div>
-     <div className="mx-auto grid aspect-square w-full max-w-[680px] grid-cols-6 overflow-hidden rounded-2xl border border-white/15 bg-black/30">
-      {marks.map((m,i)=><button key={i} onClick={()=>play(i)} onContextMenu={e=>{e.preventDefault();play(i,true)}} aria-label={`cell ${i+1}`} className={`relative flex items-center justify-center border border-white/[.07] transition hover:bg-white/[.06] ${hint===i?"ring-2 ring-amber-300":""}`}>
-       {m==="star"&&<svg viewBox="0 0 100 100" className="h-[55%] w-[55%] fill-amber-300 drop-shadow-[0_0_12px_rgba(251,191,36,.25)]"><path d="M50 5 61 38 96 38 68 58 79 92 50 72 21 92 32 58 4 38 39 38Z"/></svg>}
-       {m==="x"&&<span className="text-xl text-white/25">×</span>}
-      </button>)}
-     </div>
-     <div className="mt-5 flex flex-wrap justify-center gap-2">
-      <button onClick={undo} className="control"><Undo2 size={16}/>Undo</button><button onClick={redo} className="control"><Redo2 size={16}/>Redo</button><button onClick={reset} className="control"><RotateCcw size={16}/>Reset</button><button onClick={hintMe} className="control"><Lightbulb size={16}/>Hint</button>
-     </div>
-    </div>
-    <aside className="space-y-3">
-      <div className="rounded-3xl border border-white/10 bg-white/[.035] p-5"><div className="text-xs uppercase tracking-[.2em] text-white/35">Progress</div><div className="mt-2 text-3xl font-semibold">{stars}<span className="text-white/25"> / 6</span></div><div className="mt-1 text-sm text-white/45">stars placed</div></div>
-      <div className="rounded-3xl border border-white/10 bg-white/[.035] p-5"><div className="text-xs uppercase tracking-[.2em] text-white/35">Levels</div><div className="mt-2 text-3xl font-semibold">1,000</div><div className="mt-1 text-sm text-white/45">generated puzzles</div></div>
-      <div className="flex gap-2"><button disabled={levelId<=1} onClick={()=>{setLevelId(x=>x-1);reset()}} className="control flex-1"><ArrowLeft size={16}/>Prev</button><button disabled={levelId>=TOTAL} onClick={()=>{setLevelId(x=>x+1);reset()}} className="control flex-1">Next<ChevronRight size={16}/></button></div>
-    </aside>
-   </section>
-   {done&&<div className="fixed inset-0 z-50 grid place-items-center bg-black/65 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#11141a] p-8 text-center shadow-2xl"><div className="text-xs uppercase tracking-[.25em] text-amber-300/70">Completed</div><h2 className="mt-3 text-4xl font-semibold">Level geschafft</h2><p className="mt-3 text-white/50">Zeit {fmt(seconds)} · {stars} Sterne</p><button onClick={()=>{setLevelId(x=>Math.min(TOTAL,x+1));reset()}} className="mt-7 w-full rounded-2xl bg-amber-300 px-5 py-3 font-semibold text-black">Nächstes Level</button></div></div>}
-  </div>
-  <style jsx global>{`.control{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:.85rem;padding:.65rem .85rem;font-size:.85rem;color:rgba(255,255,255,.75)}.control:hover{background:rgba(255,255,255,.08)}.control:disabled{opacity:.3}`}</style>
- </main>
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft, ChevronLeft, ChevronRight, Clock3, Grid3X3, Lightbulb,
+  Pause, Play, Redo2, RotateCcw, Search, Settings2, Trophy, Undo2, X
+} from "lucide-react";
+import { generateLevel, solved, totalLevels, type Difficulty, type Mark } from "@/lib/game";
+
+const SIZE = 6;
+const EMPTY = () => Array<Mark>(SIZE * SIZE).fill("empty");
+const difficultyStyles: Record<Difficulty, string> = {
+  Easy: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
+  Medium: "text-sky-300 bg-sky-400/10 border-sky-400/20",
+  Hard: "text-amber-300 bg-amber-400/10 border-amber-400/20",
+  Expert: "text-rose-300 bg-rose-400/10 border-rose-400/20"
+};
+
+export default function Game() {
+  const [levelId, setLevelId] = useState(1);
+  const [marks, setMarks] = useState<Mark[]>(EMPTY);
+  const [history, setHistory] = useState<Mark[][]>([]);
+  const [future, setFuture] = useState<Mark[][]>([]);
+  const [seconds, setSeconds] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [complete, setComplete] = useState(false);
+  const [hint, setHint] = useState<number | null>(null);
+  const [screen, setScreen] = useState<"game" | "levels">("game");
+  const [search, setSearch] = useState("");
+
+  const level = useMemo(() => generateLevel(levelId), [levelId]);
+  const starCount = marks.filter(x => x === "star").length;
+  const fmt = (n: number) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+
+  useEffect(() => {
+    const saved = localStorage.getItem("star-battles-state");
+    if (!saved) return;
+    try {
+      const data = JSON.parse(saved);
+      if (Number.isInteger(data.level)) setLevelId(Math.min(totalLevels(), Math.max(1, data.level)));
+      if (Array.isArray(data.marks) && data.marks.length === 36) setMarks(data.marks);
+      if (Number.isFinite(data.seconds)) setSeconds(data.seconds);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("star-battles-state", JSON.stringify({ level: levelId, marks, seconds }));
+  }, [levelId, marks, seconds]);
+
+  useEffect(() => {
+    if (paused || complete || screen !== "game") return;
+    const timer = window.setInterval(() => setSeconds(s => s + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [paused, complete, screen]);
+
+  function loadLevel(id: number) {
+    setLevelId(Math.max(1, Math.min(totalLevels(), id)));
+    setMarks(EMPTY());
+    setHistory([]);
+    setFuture([]);
+    setSeconds(0);
+    setPaused(false);
+    setComplete(false);
+    setHint(null);
+    setScreen("game");
+  }
+
+  function commit(next: Mark[]) {
+    setHistory(h => [...h, marks]);
+    setFuture([]);
+    setMarks(next);
+    setHint(null);
+    if (solved(level, new Set(next.flatMap((m, i) => m === "star" ? [i] : [])))) setComplete(true);
+  }
+
+  function toggleCell(i: number, forceX = false) {
+    if (paused || complete) return;
+    const next = [...marks];
+    if (forceX) next[i] = next[i] === "x" ? "empty" : "x";
+    else next[i] = next[i] === "star" ? "empty" : next[i] === "x" ? "star" : "star";
+    commit(next);
+  }
+
+  function undo() {
+    if (!history.length) return;
+    const previous = history[history.length - 1];
+    setHistory(history.slice(0, -1));
+    setFuture([marks, ...future]);
+    setMarks(previous);
+    setComplete(false);
+  }
+
+  function redo() {
+    if (!future.length) return;
+    const next = future[0];
+    setFuture(future.slice(1));
+    setHistory([...history, marks]);
+    setMarks(next);
+  }
+
+  function reset() {
+    setMarks(EMPTY()); setHistory([]); setFuture([]); setSeconds(0); setComplete(false); setHint(null);
+  }
+
+  function giveHint() {
+    const target = level.solution.find(cell => marks[cell] !== "star");
+    if (target !== undefined) setHint(target);
+  }
+
+  const levelNumbers = useMemo(() => {
+    const query = search.trim();
+    if (!query) return Array.from({ length: 60 }, (_, i) => i + 1);
+    const n = Number(query);
+    if (!Number.isInteger(n) || n < 1 || n > totalLevels()) return [];
+    return Array.from({ length: 21 }, (_, i) => n - 10 + i).filter(x => x >= 1 && x <= totalLevels());
+  }, [search]);
+
+  if (screen === "levels") return (
+    <main className="min-h-screen bg-[#07090d] px-4 py-6 text-white md:px-8">
+      <div className="mx-auto max-w-5xl">
+        <header className="mb-8 flex items-center gap-4">
+          <button onClick={() => setScreen("game")} className="iconButton" aria-label="Back"><ArrowLeft size={19}/></button>
+          <div><p className="eyebrow">Star Battles</p><h1 className="text-2xl font-semibold">Level auswählen</h1></div>
+        </header>
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.035] px-4 py-3">
+          <Search size={18} className="text-white/35"/>
+          <input value={search} onChange={e => setSearch(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Level 1–1000 suchen" className="w-full bg-transparent outline-none placeholder:text-white/25"/>
+        </div>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 md:grid-cols-8">
+          {levelNumbers.map(n => {
+            const d = generateLevel(n).difficulty;
+            return <button key={n} onClick={() => loadLevel(n)} className={`rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 hover:bg-white/[.06] ${n===levelId?"border-amber-300/60 bg-amber-300/10":"border-white/10 bg-white/[.025]"}`}>
+              <span className="text-sm font-semibold">#{n}</span><span className={`mt-2 block w-fit rounded-full border px-2 py-0.5 text-[10px] ${difficultyStyles[d]}`}>{d}</span>
+            </button>
+          })}
+        </div>
+      </div>
+    </main>
+  );
+
+  return (
+    <main className="min-h-screen bg-[#07090d] px-4 py-5 text-white md:px-8">
+      <div className="mx-auto max-w-6xl">
+        <header className="mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-300 text-black"><Grid3X3 size={20}/></div><div><p className="eyebrow">Star Battles</p><h1 className="font-semibold">Level {levelId}</h1></div></div>
+          <div className="flex gap-2"><button onClick={() => setScreen("levels")} className="iconButton" title="Levels"><Grid3X3 size={18}/></button><button onClick={() => setPaused(!paused)} className="iconButton" title="Pause">{paused?<Play size={18}/>:<Pause size={18}/>}</button></div>
+        </header>
+
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="rounded-[28px] border border-white/10 bg-white/[.035] p-3 shadow-2xl md:p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <span className={`rounded-full border px-3 py-1 text-xs ${difficultyStyles[level.difficulty]}`}>{level.difficulty}</span>
+              <span className="flex items-center gap-2 text-sm text-white/45"><Clock3 size={15}/>{fmt(seconds)}</span>
+            </div>
+            <div className="mx-auto grid aspect-square w-full max-w-[650px] grid-cols-6 overflow-hidden rounded-2xl border border-white/20 bg-[#0a0c11]">
+              {marks.map((mark, i) => {
+                const region = level.regions[i];
+                const row = Math.floor(i / SIZE), col = i % SIZE;
+                const borders = [
+                  row===0 || level.regions[i-SIZE]!==region ? "border-t-white/70" : "",
+                  row===SIZE-1 || level.regions[i+SIZE]!==region ? "border-b-white/70" : "",
+                  col===0 || level.regions[i-1]!==region ? "border-l-white/70" : "",
+                  col===SIZE-1 || level.regions[i+1]!==region ? "border-r-white/70" : ""
+                ].join(" ");
+                return <button key={i} onClick={() => toggleCell(i)} onContextMenu={e => {e.preventDefault();toggleCell(i,true)}} className={`relative flex items-center justify-center border transition hover:bg-white/[.06] ${borders} ${hint===i?"ring-2 ring-inset ring-amber-300":""}`} aria-label={`Cell ${i+1}`}>
+                  {mark==="star" && <span className="text-4xl leading-none text-amber-300 drop-shadow-[0_0_14px_rgba(251,191,36,.35)]">★</span>}
+                  {mark==="x" && <X size={22} className="text-white/25"/>}
+                </button>
+              })}
+            </div>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <button className="control" onClick={undo} disabled={!history.length}><Undo2 size={16}/>Undo</button>
+              <button className="control" onClick={redo} disabled={!future.length}><Redo2 size={16}/>Redo</button>
+              <button className="control" onClick={reset}><RotateCcw size={16}/>Reset</button>
+              <button className="control" onClick={giveHint}><Lightbulb size={16}/>Hint</button>
+            </div>
+            <p className="mt-4 text-center text-xs text-white/30">Linksklick: Stern · Rechtsklick: X · Sterne dürfen sich nicht berühren</p>
+          </div>
+
+          <aside className="space-y-3">
+            <div className="rounded-[24px] border border-white/10 bg-white/[.035] p-5"><p className="eyebrow">Progress</p><div className="mt-2 text-3xl font-semibold">{starCount}<span className="text-white/20"> / 6</span></div><p className="mt-1 text-sm text-white/40">Sterne gesetzt</p></div>
+            <div className="rounded-[24px] border border-white/10 bg-white/[.035] p-5"><p className="eyebrow">Puzzle</p><div className="mt-2 text-2xl font-semibold">#{levelId} <span className="text-base text-white/30">/ 1000</span></div><p className="mt-1 text-sm text-white/40">6 × 6 · 1 Stern je Zeile, Spalte & Region</p></div>
+            <div className="rounded-[24px] border border-white/10 bg-white/[.035] p-5"><p className="eyebrow">Navigation</p><div className="mt-3 grid grid-cols-2 gap-2"><button className="control" disabled={levelId===1} onClick={()=>loadLevel(levelId-1)}><ChevronLeft size={16}/>Zurück</button><button className="control" disabled={levelId===totalLevels()} onClick={()=>loadLevel(levelId+1)}>Weiter<ChevronRight size={16}/></button></div></div>
+          </aside>
+        </section>
+
+        {paused && <div className="fixed inset-0 z-40 grid place-items-center bg-black/70 p-5 backdrop-blur-md"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#11141a] p-8 text-center"><Pause className="mx-auto text-white/50" size={28}/><h2 className="mt-4 text-2xl font-semibold">Pausiert</h2><button onClick={()=>setPaused(false)} className="mt-6 w-full rounded-2xl bg-amber-300 px-5 py-3 font-semibold text-black">Fortsetzen</button></div></div>}
+
+        {complete && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-5 backdrop-blur-md"><div className="w-full max-w-md rounded-3xl border border-amber-300/20 bg-[#11141a] p-8 text-center shadow-2xl"><Trophy className="mx-auto text-amber-300" size={32}/><p className="eyebrow mt-4">Puzzle gelöst</p><h2 className="mt-2 text-4xl font-semibold">Stark!</h2><p className="mt-3 text-white/45">Level {levelId} · {fmt(seconds)} · {starCount} Sterne</p><button onClick={()=>loadLevel(Math.min(totalLevels(), levelId+1))} className="mt-7 w-full rounded-2xl bg-amber-300 px-5 py-3 font-semibold text-black">Nächstes Level</button></div></div>}
+      </div>
+      <style jsx global>{`
+        .eyebrow{font-size:.68rem;text-transform:uppercase;letter-spacing:.2em;color:rgba(255,255,255,.35)}
+        .iconButton{display:grid;place-items:center;width:42px;height:42px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(255,255,255,.035);color:rgba(255,255,255,.75);transition:.15s}
+        .iconButton:hover{background:rgba(255,255,255,.08)}
+        .control{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:14px;padding:.68rem .9rem;font-size:.84rem;color:rgba(255,255,255,.78);transition:.15s}
+        .control:hover:not(:disabled){background:rgba(255,255,255,.08)}
+        .control:disabled{opacity:.28}
+      `}</style>
+    </main>
+  );
 }
