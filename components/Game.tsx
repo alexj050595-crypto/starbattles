@@ -24,6 +24,8 @@ export default function Game() {
   const [seconds, setSeconds] = useState(0);
   const [paused, setPaused] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [completedLevels, setCompletedLevels] = useState<number[]>([]);
+  const [bestTimes, setBestTimes] = useState<Record<string, number>>({});
   const [hint, setHint] = useState<number | null>(null);
   const [screen, setScreen] = useState<"game" | "levels">("game");
   const [search, setSearch] = useState("");
@@ -40,12 +42,14 @@ export default function Game() {
       if (Number.isInteger(data.level)) setLevelId(Math.min(totalLevels(), Math.max(1, data.level)));
       if (Array.isArray(data.marks) && data.marks.length === 36) setMarks(data.marks);
       if (Number.isFinite(data.seconds)) setSeconds(data.seconds);
+      if (Array.isArray(data.completedLevels)) setCompletedLevels(data.completedLevels);
+      if (data.bestTimes && typeof data.bestTimes === "object") setBestTimes(data.bestTimes);
     } catch {}
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("star-battles-state", JSON.stringify({ level: levelId, marks, seconds }));
-  }, [levelId, marks, seconds]);
+    localStorage.setItem("star-battles-state", JSON.stringify({ level: levelId, marks, seconds, completedLevels, bestTimes }));
+  }, [levelId, marks, seconds, completedLevels, bestTimes]);
 
   useEffect(() => {
     if (paused || complete || screen !== "game") return;
@@ -70,7 +74,14 @@ export default function Game() {
     setFuture([]);
     setMarks(next);
     setHint(null);
-    if (solved(level, new Set(next.flatMap((m, i) => m === "star" ? [i] : [])))) setComplete(true);
+    if (solved(level, new Set(next.flatMap((m, i) => m === "star" ? [i] : [])))) {
+      setComplete(true);
+      setCompletedLevels(done => done.includes(levelId) ? done : [...done, levelId]);
+      setBestTimes(times => {
+        const previous = times[String(levelId)];
+        return previous === undefined || seconds < previous ? { ...times, [String(levelId)]: seconds } : times;
+      });
+    }
   }
 
   function toggleCell(i: number, forceX = false) {
@@ -102,6 +113,18 @@ export default function Game() {
     setMarks(EMPTY()); setHistory([]); setFuture([]); setSeconds(0); setComplete(false); setHint(null);
   }
 
+  function hasConflict(i: number) {
+    if (marks[i] !== "star") return false;
+    const stars = new Set(marks.flatMap((m, cell) => m === "star" ? [cell] : []));
+    const row = Math.floor(i / SIZE), col = i % SIZE;
+    const region = level.regions[i];
+    const rowCount = [...stars].filter(cell => Math.floor(cell / SIZE) === row).length;
+    const colCount = [...stars].filter(cell => cell % SIZE === col).length;
+    const regionCount = [...stars].filter(cell => level.regions[cell] === region).length;
+    return rowCount > 1 || colCount > 1 || regionCount > 1 ||
+      [...stars].some(cell => cell !== i && Math.abs(Math.floor(cell / SIZE) - row) <= 1 && Math.abs((cell % SIZE) - col) <= 1);
+  }
+
   function giveHint() {
     const target = level.solution.find(cell => marks[cell] !== "star");
     if (target !== undefined) setHint(target);
@@ -130,7 +153,7 @@ export default function Game() {
           {levelNumbers.map(n => {
             const d = generateLevel(n).difficulty;
             return <button key={n} onClick={() => loadLevel(n)} className={`rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 hover:bg-white/[.06] ${n===levelId?"border-amber-300/60 bg-amber-300/10":"border-white/10 bg-white/[.025]"}`}>
-              <span className="text-sm font-semibold">#{n}</span><span className={`mt-2 block w-fit rounded-full border px-2 py-0.5 text-[10px] ${difficultyStyles[d]}`}>{d}</span>
+              <span className="flex items-center justify-between text-sm font-semibold">#{n}{completedLevels.includes(n) && <Trophy size={13} className="text-amber-300" />}</span><span className={`mt-2 block w-fit rounded-full border px-2 py-0.5 text-[10px] ${difficultyStyles[d]}`}>{d}</span>
             </button>
           })}
         </div>
@@ -163,7 +186,7 @@ export default function Game() {
                   col===SIZE-1 || level.regions[i+1]!==region ? "border-r-white/70" : ""
                 ].join(" ");
                 return <button key={i} onClick={() => toggleCell(i)} onContextMenu={e => {e.preventDefault();toggleCell(i,true)}} className={`relative flex items-center justify-center border transition hover:bg-white/[.06] ${borders} ${hint===i?"ring-2 ring-inset ring-amber-300":""}`} aria-label={`Cell ${i+1}`}>
-                  {mark==="star" && <span className="text-4xl leading-none text-amber-300 drop-shadow-[0_0_14px_rgba(251,191,36,.35)]">★</span>}
+                  {mark==="star" && <span className={`text-4xl leading-none ${hasConflict(i) ? "text-rose-300" : "text-amber-300"}`} drop-shadow-[0_0_14px_rgba(251,191,36,.35)]">★</span>}
                   {mark==="x" && <X size={22} className="text-white/25"/>}
                 </button>
               })}
@@ -179,6 +202,7 @@ export default function Game() {
 
           <aside className="space-y-3">
             <div className="rounded-[24px] border border-white/10 bg-white/[.035] p-5"><p className="eyebrow">Progress</p><div className="mt-2 text-3xl font-semibold">{starCount}<span className="text-white/20"> / 6</span></div><p className="mt-1 text-sm text-white/40">Sterne gesetzt</p></div>
+            <div className="rounded-[24px] border border-white/10 bg-white/[.035] p-5"><p className="eyebrow">Dein Fortschritt</p><div className="mt-2 text-2xl font-semibold">{completedLevels.length}<span className="text-base text-white/25"> / 1000</span></div><p className="mt-1 text-sm text-white/40">Level abgeschlossen</p></div>
             <div className="rounded-[24px] border border-white/10 bg-white/[.035] p-5"><p className="eyebrow">Puzzle</p><div className="mt-2 text-2xl font-semibold">#{levelId} <span className="text-base text-white/30">/ 1000</span></div><p className="mt-1 text-sm text-white/40">6 × 6 · 1 Stern je Zeile, Spalte & Region</p></div>
             <div className="rounded-[24px] border border-white/10 bg-white/[.035] p-5"><p className="eyebrow">Navigation</p><div className="mt-3 grid grid-cols-2 gap-2"><button className="control" disabled={levelId===1} onClick={()=>loadLevel(levelId-1)}><ChevronLeft size={16}/>Zurück</button><button className="control" disabled={levelId===totalLevels()} onClick={()=>loadLevel(levelId+1)}>Weiter<ChevronRight size={16}/></button></div></div>
           </aside>
@@ -186,7 +210,7 @@ export default function Game() {
 
         {paused && <div className="fixed inset-0 z-40 grid place-items-center bg-black/70 p-5 backdrop-blur-md"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#11141a] p-8 text-center"><Pause className="mx-auto text-white/50" size={28}/><h2 className="mt-4 text-2xl font-semibold">Pausiert</h2><button onClick={()=>setPaused(false)} className="mt-6 w-full rounded-2xl bg-amber-300 px-5 py-3 font-semibold text-black">Fortsetzen</button></div></div>}
 
-        {complete && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-5 backdrop-blur-md"><div className="w-full max-w-md rounded-3xl border border-amber-300/20 bg-[#11141a] p-8 text-center shadow-2xl"><Trophy className="mx-auto text-amber-300" size={32}/><p className="eyebrow mt-4">Puzzle gelöst</p><h2 className="mt-2 text-4xl font-semibold">Stark!</h2><p className="mt-3 text-white/45">Level {levelId} · {fmt(seconds)} · {starCount} Sterne</p><button onClick={()=>loadLevel(Math.min(totalLevels(), levelId+1))} className="mt-7 w-full rounded-2xl bg-amber-300 px-5 py-3 font-semibold text-black">Nächstes Level</button></div></div>}
+        {complete && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-5 backdrop-blur-md"><div className="w-full max-w-md rounded-3xl border border-amber-300/20 bg-[#11141a] p-8 text-center shadow-2xl"><Trophy className="mx-auto text-amber-300" size={32}/><p className="eyebrow mt-4">Puzzle gelöst</p><h2 className="mt-2 text-4xl font-semibold">Stark!</h2><p className="mt-3 text-white/45">Level {levelId} · {fmt(seconds)} · {starCount} Sterne</p>{bestTimes[String(levelId)] !== undefined && <p className="mt-1 text-xs text-amber-300/70">Bestzeit: {fmt(bestTimes[String(levelId)])}</p>}<button onClick={()=>loadLevel(Math.min(totalLevels(), levelId+1))} className="mt-7 w-full rounded-2xl bg-amber-300 px-5 py-3 font-semibold text-black">Nächstes Level</button></div></div>}
       </div>
       <style jsx global>{`
         .eyebrow{font-size:.68rem;text-transform:uppercase;letter-spacing:.2em;color:rgba(255,255,255,.35)}
