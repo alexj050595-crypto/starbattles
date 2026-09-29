@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Clock3, Grid3X3, Lightbulb,
-  Pause, Play, Redo2, RotateCcw, Search, Settings2, Trophy, Undo2, X
+  Pause, Play, Redo2, RotateCcw, Search, Trophy, Undo2
 } from "lucide-react";
 import { generateLevel, solved, totalLevels, type Difficulty, type Mark } from "@/lib/game";
 
@@ -37,7 +37,7 @@ export default function Game() {
   const [hint, setHint] = useState<number | null>(null);
   const [screen, setScreen] = useState<"game" | "levels">("game");
   const [search, setSearch] = useState("");
-  const [tool, setTool] = useState<"star" | "dot" | "x">("star");
+  const lastTap = useRef<{ cell: number; time: number }>({ cell: -1, time: 0 });
 
   const level = useMemo(() => generateLevel(levelId), [levelId]);
   const starCount = marks.filter(x => x === "star").length;
@@ -93,10 +93,38 @@ export default function Game() {
     }
   }
 
-  function toggleCell(i: number) {
+  function handleCellPointerDown(e: React.PointerEvent<HTMLDivElement>, i: number) {
     if (paused || complete) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+
+    const now = performance.now();
+    const previous = lastTap.current;
+    const isDoubleTap = previous.cell === i && now - previous.time < 420;
+
+    lastTap.current = { cell: i, time: now };
+
     const next = [...marks];
-    next[i] = next[i] === tool ? "empty" : tool;
+
+    // Simple touch logic:
+    // 1st tap -> dot
+    // 2nd tap on the same cell -> star
+    // 3rd tap -> empty
+    if (marks[i] === "empty") {
+      next[i] = "dot";
+    } else if (marks[i] === "dot" && isDoubleTap) {
+      next[i] = "star";
+    } else if (marks[i] === "dot") {
+      next[i] = "dot";
+    } else {
+      next[i] = "empty";
+    }
+
     commit(next);
   }
 
@@ -183,48 +211,63 @@ export default function Game() {
               <span className={`rounded-full border px-3 py-1 text-xs ${difficultyStyles[level.difficulty]}`}>{level.difficulty}</span>
               <span className="flex items-center gap-2 text-sm text-white/45"><Clock3 size={15}/>{fmt(seconds)}</span>
             </div>
-            <div className="mx-auto grid aspect-square w-full max-w-[650px] grid-cols-6 overflow-hidden rounded-2xl border border-white/20 bg-[#0a0c11] select-none touch-none">
+            <div className="mb-3 text-center text-xs text-white/30">Das Spielfeld bleibt beim Tippen fest stehen.</div>\n            <div\n              role="grid"
+              aria-label="Star Battles Spielfeld"
+              className="mx-auto grid w-full max-w-[650px] flex-none grid-cols-6 grid-rows-6 overflow-hidden rounded-2xl border border-white/20 bg-[#0a0c11] select-none"
+              style={{
+                aspectRatio: "1 / 1",
+                touchAction: "none",
+                overscrollBehavior: "contain",
+                WebkitUserSelect: "none",
+                WebkitTouchCallout: "none",
+                contain: "strict"
+              }}
+              onContextMenu={e => e.preventDefault()}
+              onDragStart={e => e.preventDefault()}
+            >
               {marks.map((mark, i) => {
                 const region = level.regions[i];
-                const row = Math.floor(i / SIZE), col = i % SIZE;
+                const row = Math.floor(i / SIZE);
+                const col = i % SIZE;
 
                 const top = row === 0 || level.regions[i - SIZE] !== region;
                 const bottom = row === SIZE - 1 || level.regions[i + SIZE] !== region;
                 const left = col === 0 || level.regions[i - 1] !== region;
                 const right = col === SIZE - 1 || level.regions[i + 1] !== region;
                 const isRegionStart = i === level.regions.findIndex(value => value === region);
+
                 const outline = [
                   top ? "inset 0 3px 0 rgba(255,255,255,.62)" : "inset 0 1px 0 rgba(255,255,255,.08)",
                   bottom ? "inset 0 -3px 0 rgba(255,255,255,.62)" : "inset 0 -1px 0 rgba(255,255,255,.08)",
                   left ? "inset 3px 0 0 rgba(255,255,255,.62)" : "inset 1px 0 0 rgba(255,255,255,.08)",
                   right ? "inset -3px 0 0 rgba(255,255,255,.62)" : "inset -1px 0 0 rgba(255,255,255,.08)"
                 ].join(", ");
-                return <button
-                  key={i}
-                  type="button"
-                  onPointerDown={e => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleCell(i);
-                  }}
-                  onTouchStart={e => e.preventDefault()}
-                  onContextMenu={e => e.preventDefault()}
-                  onDragStart={e => e.preventDefault()}
-                  style={{ backgroundColor: REGION_STYLES[region], boxShadow: outline, touchAction: "none", WebkitUserSelect: "none" }}
-                  className={`relative flex min-h-0 min-w-0 select-none touch-none items-center justify-center overflow-hidden border-0 p-0 transition hover:brightness-125 active:brightness-110 ${hint===i?"ring-2 ring-inset ring-amber-300":""}`}
-                  tabIndex={-1}
-                  aria-label={`Cell ${i+1}${isRegionStart ? ", region " + (region + 1) : ""}`}
-                >
-                  {mark==="star" && <span className={`text-4xl leading-none drop-shadow-[0_0_14px_rgba(251,191,36,.35)] ${hasConflict(i) ? "text-rose-300" : "text-amber-300"}`}>★</span>}
-                  {mark==="dot" && <span className="h-2.5 w-2.5 rounded-full bg-white/70 shadow-[0_0_8px_rgba(255,255,255,.25)]" />}
-                  {mark==="x" && <X size={22} className="text-white/25"/>}
-                </button>
+
+                return (
+                  <div
+                    key={i}
+                    role="gridcell"
+                    aria-label={`Feld ${i + 1}${isRegionStart ? ", Region " + (region + 1) : ""}${mark === "star" ? ", Stern" : mark === "dot" ? ", Punkt" : ", leer"}`}
+                    aria-pressed={mark !== "empty"}
+                    onPointerDown={e => handleCellPointerDown(e, i)}
+                    style={{
+                      backgroundColor: REGION_STYLES[region],
+                      boxShadow: outline,
+                      touchAction: "none",
+                      WebkitUserSelect: "none",
+                      WebkitTouchCallout: "none"
+                    }}
+                    className={`relative flex min-h-0 min-w-0 cursor-pointer select-none touch-none items-center justify-center overflow-hidden p-0 transition-[filter] duration-100 hover:brightness-125 active:brightness-110 ${hint === i ? "ring-2 ring-inset ring-amber-300" : ""}`}
+                  >
+                    {mark === "star" && (
+                      <span className={`pointer-events-none text-4xl leading-none drop-shadow-[0_0_14px_rgba(251,191,36,.35)] ${hasConflict(i) ? "text-rose-300" : "text-amber-300"}`}>★</span>
+                    )}
+                    {mark === "dot" && (
+                      <span className="pointer-events-none h-2.5 w-2.5 rounded-full bg-white/70 shadow-[0_0_8px_rgba(255,255,255,.25)]" />
+                    )}
+                  </div>
+                );
               })}
-            </div>
-            <div className="mb-3 flex justify-center gap-2">
-              <button type="button" onClick={() => setTool("star")} className={`control ${tool === "star" ? "border-amber-300/50 bg-amber-300/10 text-amber-200" : ""}`}>★ Stern</button>
-              <button type="button" onClick={() => setTool("dot")} className={`control ${tool === "dot" ? "border-white/30 bg-white/10 text-white" : ""}`}><span className="h-2 w-2 rounded-full bg-current" /> Punkt</button>
-              <button type="button" onClick={() => setTool("x")} className={`control ${tool === "x" ? "border-white/30 bg-white/10 text-white" : ""}`}><X size={16}/> X</button>
             </div>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               <button className="control" onClick={undo} disabled={!history.length}><Undo2 size={16}/>Undo</button>
@@ -232,7 +275,7 @@ export default function Game() {
               <button className="control" onClick={reset}><RotateCcw size={16}/>Reset</button>
               <button className="control" onClick={giveHint}><Lightbulb size={16}/>Hint</button>
             </div>
-            <p className="mt-4 text-center text-xs text-white/30">Werkzeug auswählen · Stern, Punkt oder X setzen · Sterne dürfen sich nicht berühren</p>
+            <div className="mt-4 rounded-2xl border border-white/8 bg-white/[.025] px-4 py-3 text-center text-xs leading-5 text-white/40">Einmal tippen = Punkt · zweimal schnell tippen = Stern · noch einmal = leer</div>
           </div>
 
           <aside className="space-y-3">
