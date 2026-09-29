@@ -13,7 +13,6 @@ export type Level = {
 const SIZE = 6;
 const TOTAL = 1000;
 const cache = new Map<number, Level>();
-
 const dirs = [-1, 0, 1];
 
 function rng(seed: number) {
@@ -41,148 +40,210 @@ export function neighbors(cell: number, n = SIZE, diagonal = true) {
   return result;
 }
 
-function compatible(level: Pick<Level, "size" | "regions" | "starsPerUnit">, placed: number[], cell: number) {
-  const n = level.size;
-  const row = Math.floor(cell / n);
-  const col = cell % n;
-  if (placed.some(p => Math.floor(p / n) === row || p % n === col)) return false;
-  if (placed.some(p => neighbors(p, n).includes(cell))) return false;
-  const region = level.regions[cell];
-  if (placed.filter(p => level.regions[p] === region).length >= level.starsPerUnit) return false;
-  return true;
-}
-
 export function validStars(level: Level, stars: Set<number>) {
-  const n = level.size, k = level.starsPerUnit;
+  const n = level.size;
   const rows = new Array(n).fill(0);
   const cols = new Array(n).fill(0);
   const regions = new Array(n).fill(0);
+
   for (const cell of stars) {
-    rows[Math.floor(cell / n)]++;
-    cols[cell % n]++;
-    regions[level.regions[cell]]++;
-    if (rows[Math.floor(cell / n)] > k || cols[cell % n] > k || regions[level.regions[cell]] > k) return false;
-    if (neighbors(cell, n).some(nbr => stars.has(nbr))) return false;
+    const row = Math.floor(cell / n);
+    const col = cell % n;
+    const region = level.regions[cell];
+
+    rows[row]++;
+    cols[col]++;
+    regions[region]++;
+
+    if (rows[row] > level.starsPerUnit || cols[col] > level.starsPerUnit || regions[region] > level.starsPerUnit) return false;
+    if (neighbors(cell, n).some(other => stars.has(other))) return false;
   }
+
   return true;
 }
 
 export function solved(level: Level, stars: Set<number>) {
   if (stars.size !== level.size * level.starsPerUnit || !validStars(level, stars)) return false;
-  const n = level.size, k = level.starsPerUnit;
-  const rows = new Array(n).fill(0), cols = new Array(n).fill(0), regions = new Array(n).fill(0);
+
+  const rows = new Array(level.size).fill(0);
+  const cols = new Array(level.size).fill(0);
+  const regions = new Array(level.size).fill(0);
+
   for (const cell of stars) {
-    rows[Math.floor(cell / n)]++;
-    cols[cell % n]++;
+    rows[Math.floor(cell / level.size)]++;
+    cols[cell % level.size]++;
     regions[level.regions[cell]]++;
   }
-  return rows.every(x => x === k) && cols.every(x => x === k) && regions.every(x => x === k);
+
+  return rows.every(count => count === level.starsPerUnit)
+    && cols.every(count => count === level.starsPerUnit)
+    && regions.every(count => count === level.starsPerUnit);
 }
 
 export function countSolutions(level: Level, limit = 2) {
-  const n = level.size;
   let count = 0;
   const placed: number[] = [];
-  const usedCols = new Set<number>();
+  const usedColumns = new Set<number>();
   const usedRegions = new Set<number>();
 
   function search(row: number) {
     if (count >= limit) return;
-    if (row === n) { count++; return; }
-    for (let col = 0; col < n; col++) {
-      const cell = index(row, col, n);
-      if (usedCols.has(col) || usedRegions.has(level.regions[cell])) continue;
-      if (placed.some(p => neighbors(p, n).includes(cell))) continue;
-      placed.push(cell); usedCols.add(col); usedRegions.add(level.regions[cell]);
+    if (row === level.size) {
+      count++;
+      return;
+    }
+
+    for (let col = 0; col < level.size; col++) {
+      const cell = index(row, col, level.size);
+      const region = level.regions[cell];
+
+      if (usedColumns.has(col) || usedRegions.has(region)) continue;
+      if (placed.some(other => neighbors(other, level.size).includes(cell))) continue;
+
+      placed.push(cell);
+      usedColumns.add(col);
+      usedRegions.add(region);
       search(row + 1);
-      placed.pop(); usedCols.delete(col); usedRegions.delete(level.regions[cell]);
+      placed.pop();
+      usedColumns.delete(col);
+      usedRegions.delete(region);
+
       if (count >= limit) return;
     }
   }
+
   search(0);
   return count;
 }
 
-function solutionFor(random: () => number) {
-  for (let attempt = 0; attempt < 300; attempt++) {
-    const placed: number[] = [];
-    const cols = new Set<number>();
+function makeSolution(random: () => number) {
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const solution: number[] = [];
+    const usedColumns = new Set<number>();
+
     for (let row = 0; row < SIZE; row++) {
       const candidates = Array.from({ length: SIZE }, (_, col) => index(row, col))
-        .filter(cell => !cols.has(cell % SIZE) && !placed.some(p => neighbors(p).includes(cell)))
+        .filter(cell => {
+          if (usedColumns.has(cell % SIZE)) return false;
+          return !solution.some(other => neighbors(other).includes(cell));
+        })
         .sort(() => random() - 0.5);
+
+      if (!candidates.length) break;
+
       const cell = candidates[0];
-      if (cell === undefined) break;
-      placed.push(cell);
-      cols.add(cell % SIZE);
+      solution.push(cell);
+      usedColumns.add(cell % SIZE);
     }
-    if (placed.length === SIZE) return placed;
+
+    if (solution.length === SIZE) return solution;
   }
+
   return null;
 }
 
+/**
+ * Creates six connected regions of exactly six cells.
+ * Every region starts at exactly one solution star, so the
+ * generated solution automatically contains one star per region.
+ */
 function makeRegions(random: () => number, seeds: number[]) {
-  const regions = new Array(SIZE * SIZE).fill(-1);
-  const frontier: { cell: number; region: number }[] = [];
-  seeds.forEach((seed, region) => { regions[seed] = region; });
-  seeds.forEach((seed, region) => frontier.push(...neighbors(seed).map(cell => ({ cell, region }))));
-  while (frontier.length) {
-    const order = frontier.map((_, i) => i).sort(() => random() - 0.5);
-    let picked = -1;
-    for (const pos of order) {
-      const item = frontier[pos];
-      if (regions[item.cell] === -1) { picked = pos; break; }
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const regions = new Array(SIZE * SIZE).fill(-1);
+    const sizes = new Array(SIZE).fill(0);
+
+    seeds.forEach((seed, region) => {
+      regions[seed] = region;
+      sizes[region] = 1;
+    });
+
+    while (sizes.some(size => size < SIZE)) {
+      const candidates: Array<{ region: number; cell: number; score: number }> = [];
+
+      for (let region = 0; region < SIZE; region++) {
+        if (sizes[region] >= SIZE) continue;
+
+        const frontier = new Set<number>();
+
+        for (let cell = 0; cell < regions.length; cell++) {
+          if (regions[cell] !== region) continue;
+          for (const next of neighbors(cell, SIZE, false)) {
+            if (regions[next] === -1) frontier.add(next);
+          }
+        }
+
+        for (const cell of frontier) {
+          const sameNeighbours = neighbors(cell, SIZE, false)
+            .filter(next => regions[next] === region).length;
+          candidates.push({ region, cell, score: sameNeighbours });
+        }
+      }
+
+      if (!candidates.length) break;
+
+      const minimumSize = Math.min(...candidates.map(candidate => sizes[candidate.region]));
+      const balanced = candidates.filter(candidate => sizes[candidate.region] <= minimumSize + 1);
+
+      balanced.sort((a, b) => b.score - a.score || random() - 0.5);
+      const pool = balanced.slice(0, Math.max(1, Math.ceil(balanced.length * 0.35)));
+      const chosen = pool[Math.floor(random() * pool.length)];
+
+      regions[chosen.cell] = chosen.region;
+      sizes[chosen.region]++;
     }
-    if (picked < 0) break;
-    const item = frontier.splice(picked, 1)[0];
-    if (regions[item.cell] !== -1) continue;
-    regions[item.cell] = item.region;
-    for (const cell of neighbors(item.cell)) if (regions[cell] === -1) frontier.push({ cell, region: item.region });
+
+    if (sizes.every(size => size === SIZE) && regions.every(region => region >= 0)) {
+      return regions;
+    }
   }
-  for (let cell = 0; cell < regions.length; cell++) if (regions[cell] === -1) regions[cell] = cell % SIZE;
-  return regions;
+
+  return null;
 }
 
-function difficultyFor(id: number): Difficulty {
+function difficultyFor(id: number, solutionCount: number): Difficulty {
   if (id <= 150) return "Easy";
   if (id <= 400) return "Medium";
-  if (id <= 700) return "Hard";
-  return "Expert";
+  if (id <= 700) return solutionCount === 1 ? "Hard" : "Medium";
+  return solutionCount === 1 ? "Expert" : "Hard";
 }
 
 export function generateLevel(id: number): Level {
-  if (cache.has(id)) return cache.get(id)!;
-  const safeId = Math.max(1, Math.min(TOTAL, id));
+  const safeId = Math.max(1, Math.min(TOTAL, Math.floor(id)));
+  const cached = cache.get(safeId);
+  if (cached) return cached;
+
   const random = rng(safeId * 2654435761);
-  let best: Level | null = null;
 
-  for (let attempt = 0; attempt < 250 && !best; attempt++) {
-    const seeds = new Set<number>();
-    while (seeds.size < SIZE) seeds.add(Math.floor(random() * SIZE * SIZE));
-    const solution = solutionFor(random);
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const solution = makeSolution(random);
     if (!solution) continue;
+
     const regions = makeRegions(random, solution);
+    if (!regions) continue;
+
     const candidate: Level = {
-      id: safeId, size: SIZE, starsPerUnit: 1, regions, solution,
-      difficulty: difficultyFor(safeId)
+      id: safeId,
+      size: SIZE,
+      starsPerUnit: 1,
+      regions,
+      solution,
+      difficulty: "Easy"
     };
-    if (countSolutions(candidate) === 1) best = candidate;
+
+    const solutionCount = countSolutions(candidate);
+    candidate.difficulty = difficultyFor(safeId, solutionCount);
+
+    // The generated solution is always valid. Prefer unique puzzles,
+    // but keep valid puzzles as a fallback so every level is playable.
+    if (solutionCount === 1 || attempt === 399) {
+      cache.set(safeId, candidate);
+      return candidate;
+    }
   }
 
-  if (!best) {
-    const solution = [0, 8, 16, 24, 32, 34];
-    const regions = solution.map((_, region) => region);
-    const fallbackRegions = Array.from({ length: SIZE * SIZE }, (_, cell) => {
-      const row = Math.floor(cell / SIZE);
-      const col = cell % SIZE;
-      if (solution.includes(cell)) return solution.indexOf(cell);
-      return (row + col) % SIZE;
-    });
-    best = { id: safeId, size: SIZE, starsPerUnit: 1, regions: fallbackRegions, solution, difficulty: difficultyFor(safeId) };
-  }
-
-  cache.set(safeId, best);
-  return best;
+  throw new Error("Could not generate Star Battles level.");
 }
 
-export function totalLevels() { return TOTAL; }
+export function totalLevels() {
+  return TOTAL;
+}
