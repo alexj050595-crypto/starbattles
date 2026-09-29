@@ -37,6 +37,7 @@ export default function Game() {
   const [hint, setHint] = useState<number | null>(null);
   const [screen, setScreen] = useState<"game" | "levels">("game");
   const [search, setSearch] = useState("");
+  const [tool, setTool] = useState<"star" | "dot">("star");
 
   const level = useMemo(() => generateLevel(levelId), [levelId]);
   const starCount = marks.filter(x => x === "star").length;
@@ -96,7 +97,7 @@ export default function Game() {
     if (paused || complete) return;
     const next = [...marks];
     if (forceX) next[i] = next[i] === "x" ? "empty" : "x";
-    else next[i] = next[i] === "star" ? "empty" : next[i] === "x" ? "star" : "star";
+    else next[i] = next[i] === tool ? "empty" : tool;
     commit(next);
   }
 
@@ -183,7 +184,7 @@ export default function Game() {
               <span className={`rounded-full border px-3 py-1 text-xs ${difficultyStyles[level.difficulty]}`}>{level.difficulty}</span>
               <span className="flex items-center gap-2 text-sm text-white/45"><Clock3 size={15}/>{fmt(seconds)}</span>
             </div>
-            <div className="mx-auto grid aspect-square w-full max-w-[650px] grid-cols-6 overflow-hidden rounded-2xl border border-white/20 bg-[#0a0c11]">
+            <div className="mx-auto grid aspect-square w-full max-w-[650px] grid-cols-6 overflow-hidden rounded-2xl border border-white/20 bg-[#0a0c11] select-none touch-none">
               {marks.map((mark, i) => {
                 const region = level.regions[i];
                 const row = Math.floor(i / SIZE), col = i % SIZE;
@@ -193,29 +194,39 @@ export default function Game() {
                 const left = col === 0 || level.regions[i - 1] !== region;
                 const right = col === SIZE - 1 || level.regions[i + 1] !== region;
                 const isRegionStart = i === level.regions.findIndex(value => value === region);
-                return <button key={i} onClick={() => toggleCell(i)} onContextMenu={e => {e.preventDefault();toggleCell(i,true)}} style={{
-                  backgroundColor: REGION_STYLES[region],
-                  borderTopWidth: top ? 3 : 1,
-                  borderBottomWidth: bottom ? 3 : 1,
-                  borderLeftWidth: left ? 3 : 1,
-                  borderRightWidth: right ? 3 : 1,
-                  borderTopColor: top ? "rgba(255,255,255,.58)" : "rgba(255,255,255,.08)",
-                  borderBottomColor: bottom ? "rgba(255,255,255,.58)" : "rgba(255,255,255,.08)",
-                  borderLeftColor: left ? "rgba(255,255,255,.58)" : "rgba(255,255,255,.08)",
-                  borderRightColor: right ? "rgba(255,255,255,.58)" : "rgba(255,255,255,.08)"
-                }} className={`relative flex items-center justify-center border transition hover:brightness-125 ${hint===i?"ring-2 ring-inset ring-amber-300":""}`} aria-label={`Cell ${i+1}${isRegionStart ? ", region " + (region + 1) : ""}`}>
+                const outline = [
+                  top ? "inset 0 3px 0 rgba(255,255,255,.62)" : "inset 0 1px 0 rgba(255,255,255,.08)",
+                  bottom ? "inset 0 -3px 0 rgba(255,255,255,.62)" : "inset 0 -1px 0 rgba(255,255,255,.08)",
+                  left ? "inset 3px 0 0 rgba(255,255,255,.62)" : "inset 1px 0 0 rgba(255,255,255,.08)",
+                  right ? "inset -3px 0 0 rgba(255,255,255,.62)" : "inset -1px 0 0 rgba(255,255,255,.08)"
+                ].join(", ");
+                return <button
+                  key={i}
+                  type="button"
+                  onClick={() => toggleCell(i)}
+                  onContextMenu={e => { e.preventDefault(); toggleCell(i, true); }}
+                  onMouseDown={e => { if (e.button === 2) e.preventDefault(); }}
+                  style={{ backgroundColor: REGION_STYLES[region], boxShadow: outline }}
+                  className={`relative flex min-h-0 min-w-0 select-none touch-none items-center justify-center overflow-hidden border-0 p-0 transition hover:brightness-125 active:brightness-110 ${hint===i?"ring-2 ring-inset ring-amber-300":""}`}
+                  aria-label={`Cell ${i+1}${isRegionStart ? ", region " + (region + 1) : ""}`}
+                >
                   {mark==="star" && <span className={`text-4xl leading-none drop-shadow-[0_0_14px_rgba(251,191,36,.35)] ${hasConflict(i) ? "text-rose-300" : "text-amber-300"}`}>★</span>}
+                  {mark==="dot" && <span className="h-2.5 w-2.5 rounded-full bg-white/70 shadow-[0_0_8px_rgba(255,255,255,.25)]" />}
                   {mark==="x" && <X size={22} className="text-white/25"/>}
                 </button>
               })}
             </div>
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <div className="mb-3 flex justify-center gap-2">
+              <button type="button" onClick={() => setTool("star")} className={`control ${tool === "star" ? "border-amber-300/50 bg-amber-300/10 text-amber-200" : ""}`}>★ Stern</button>
+              <button type="button" onClick={() => setTool("dot")} className={`control ${tool === "dot" ? "border-white/30 bg-white/10 text-white" : ""}`}><span className="h-2 w-2 rounded-full bg-current" /> Punkt</button>
+            </div>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
               <button className="control" onClick={undo} disabled={!history.length}><Undo2 size={16}/>Undo</button>
               <button className="control" onClick={redo} disabled={!future.length}><Redo2 size={16}/>Redo</button>
               <button className="control" onClick={reset}><RotateCcw size={16}/>Reset</button>
               <button className="control" onClick={giveHint}><Lightbulb size={16}/>Hint</button>
             </div>
-            <p className="mt-4 text-center text-xs text-white/30">Linksklick: Stern · Rechtsklick: X · Sterne dürfen sich nicht berühren</p>
+            <p className="mt-4 text-center text-xs text-white/30">Werkzeug auswählen · Rechtsklick: X · Sterne dürfen sich nicht berühren</p>
           </div>
 
           <aside className="space-y-3">
