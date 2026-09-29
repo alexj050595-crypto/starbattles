@@ -1,4 +1,4 @@
-export type Mark = "empty" | "star" | "dot" | "x";
+export type Mark = "empty" | "star" | "dot";
 export type Difficulty = "Easy" | "Medium" | "Hard" | "Expert";
 
 export type Level = {
