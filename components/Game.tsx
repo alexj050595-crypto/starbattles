@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Clock3, Grid3X3, Lightbulb,
   Pause, Play, Redo2, RotateCcw, Search, Trophy, Undo2
@@ -37,7 +37,6 @@ export default function Game() {
   const [hint, setHint] = useState<number | null>(null);
   const [screen, setScreen] = useState<"game" | "levels">("game");
   const [search, setSearch] = useState("");
-  const lastTap = useRef<{ cell: number; time: number }>({ cell: -1, time: 0 });
 
   const level = useMemo(() => generateLevel(levelId), [levelId]);
   const starCount = marks.filter(x => x === "star").length;
@@ -108,24 +107,14 @@ export default function Game() {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {}
 
-    const now = performance.now();
-    const previous = lastTap.current;
-    const isDoubleTap = previous.cell === i && now - previous.time < 420;
-
-    lastTap.current = { cell: i, time: now };
-
     const next = [...marks];
 
-    // Simple touch logic:
-    // 1st tap -> dot
-    // 2nd tap on the same cell -> star
-    // 3rd tap -> empty
+    // One simple, reliable interaction:
+    // empty -> dot -> star -> empty
     if (marks[i] === "empty") {
       next[i] = "dot";
-    } else if (marks[i] === "dot" && isDoubleTap) {
-      next[i] = "star";
     } else if (marks[i] === "dot") {
-      next[i] = "dot";
+      next[i] = "star";
     } else {
       next[i] = "empty";
     }
@@ -227,7 +216,9 @@ export default function Game() {
                 overscrollBehavior: "contain",
                 WebkitUserSelect: "none",
                 WebkitTouchCallout: "none",
-                contain: "strict"
+                contain: "strict",
+                gridAutoRows: "1fr",
+                gridAutoColumns: "1fr"
               }}
               onContextMenu={e => e.preventDefault()}
               onDragStart={e => e.preventDefault()}
@@ -282,7 +273,7 @@ export default function Game() {
               <button className="control" onClick={reset}><RotateCcw size={16}/>Reset</button>
               <button className="control" onClick={giveHint}><Lightbulb size={16}/>Hint</button>
             </div>
-            <div className="mt-4 rounded-2xl border border-white/8 bg-white/[.025] px-4 py-3 text-center text-xs leading-5 text-white/40">Einmal tippen = Punkt · zweimal schnell tippen = Stern · noch einmal = leer</div>
+            <div className="mt-4 rounded-2xl border border-white/8 bg-white/[.025] px-4 py-3 text-center text-xs leading-5 text-white/40">Tippen: leer → Punkt → Stern → leer</div>
           </div>
 
           <aside className="space-y-3">
