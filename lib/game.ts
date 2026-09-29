@@ -103,19 +103,20 @@ export function countSolutions(level: Level, limit = 2) {
   return count;
 }
 
-function solutionFor(regions: number[], random: () => number) {
-  const level = { size: SIZE, starsPerUnit: 1, regions };
+function solutionFor(random: () => number) {
   for (let attempt = 0; attempt < 300; attempt++) {
-    const placed: number[] = [], cols = new Set<number>(), usedRegions = new Set<number>();
+    const placed: number[] = [];
+    const cols = new Set<number>();
     for (let row = 0; row < SIZE; row++) {
       const candidates = Array.from({ length: SIZE }, (_, col) => index(row, col))
-        .filter(cell => !cols.has(cell % SIZE) && !usedRegions.has(regions[cell]) && !placed.some(p => neighbors(p).includes(cell)))
+        .filter(cell => !cols.has(cell % SIZE) && !placed.some(p => neighbors(p).includes(cell)))
         .sort(() => random() - 0.5);
       const cell = candidates[0];
       if (cell === undefined) break;
-      placed.push(cell); cols.add(cell % SIZE); usedRegions.add(regions[cell]);
+      placed.push(cell);
+      cols.add(cell % SIZE);
     }
-    if (placed.length === SIZE && placed.every((cell, i) => compatible(level, placed.slice(0, i), cell))) return placed;
+    if (placed.length === SIZE) return placed;
   }
   return null;
 }
@@ -158,7 +159,7 @@ export function generateLevel(id: number): Level {
   for (let attempt = 0; attempt < 250 && !best; attempt++) {
     const seeds = new Set<number>();
     while (seeds.size < SIZE) seeds.add(Math.floor(random() * SIZE * SIZE));
-    const solution = solutionFor(Array(SIZE * SIZE).fill(0), random);
+    const solution = solutionFor(random);
     if (!solution) continue;
     const regions = makeRegions(random, solution);
     const candidate: Level = {
@@ -169,9 +170,15 @@ export function generateLevel(id: number): Level {
   }
 
   if (!best) {
-    const regions = Array.from({ length: SIZE * SIZE }, (_, cell) => Math.floor(cell / SIZE));
-    const solution = [0, 8, 16, 24, 32, 35];
-    best = { id: safeId, size: SIZE, starsPerUnit: 1, regions, solution, difficulty: difficultyFor(safeId) };
+    const solution = [0, 8, 16, 24, 32, 34];
+    const regions = solution.map((_, region) => region);
+    const fallbackRegions = Array.from({ length: SIZE * SIZE }, (_, cell) => {
+      const row = Math.floor(cell / SIZE);
+      const col = cell % SIZE;
+      if (solution.includes(cell)) return solution.indexOf(cell);
+      return (row + col) % SIZE;
+    });
+    best = { id: safeId, size: SIZE, starsPerUnit: 1, regions: fallbackRegions, solution, difficulty: difficultyFor(safeId) };
   }
 
   cache.set(safeId, best);
